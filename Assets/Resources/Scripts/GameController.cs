@@ -1,5 +1,8 @@
-﻿using UnityEngine;
+﻿using System;
+using System.Collections;
+using UnityEngine;
 using System.Collections.Generic;
+using Random = UnityEngine.Random;
 
 public class GameController : Singleton<GameController>
 {
@@ -8,9 +11,11 @@ public class GameController : Singleton<GameController>
     [Range(30, 60)] public int Angle = 50;
     [Range(300, 600)] public int Force = 300;
     [Range(5, 20)] public int numOfTrajectoryPoints = 20;
+    [HideInInspector]public bool nextJumpReady;
 
     private GameObject Player;
     private bool isJumpSucceed = false;
+    private bool isJumpReady = true;
     private Vector3 playerInitialPosition;
     private Rigidbody2D playerRigidbody2D;
 
@@ -21,6 +26,7 @@ public class GameController : Singleton<GameController>
     private GameObject _trajectoryPointHolder;
     private GameObject platformPrefab;
     private GameObject playerPrefab;
+    private Vector3 platformInitialPosition;
 
     private void initEnvironment()
     {
@@ -39,10 +45,15 @@ public class GameController : Singleton<GameController>
         //Set start platform position
         startPlatform.transform.position = new Vector3(worldPosBottomLeft.x + platformWidth / 2,
             worldPosBottomLeft.y + platformHeight / 2, worldPosBottomLeft.z);
+        platformInitialPosition = startPlatform.transform.position;
+        PlayerController.Instance._currentPlatform = startPlatform;
 
         //Set player start position
         Player.transform.position = new Vector3(startPlatform.transform.position.x,
             startPlatform.transform.position.y + platformHeight / 2 + playerHeight / 2, worldPosBottomLeft.z);
+
+        PlaceNextPlatform();
+        nextJumpReady = true;
 
         Debug.Log("initEnvironment::Completed");
     }
@@ -67,25 +78,25 @@ public class GameController : Singleton<GameController>
 
 	void Update () {
 
-	    //Draw trajectory on every change;
-	    DrawTrajectory();
-
-        //Throw player if user touch the screen.
-	    if (Input.GetMouseButtonDown(0))
+	    if (nextJumpReady)
 	    {
-	        FirePlayer();
-	    }
+            //Draw trajectory on every change;
+	        DrawTrajectory();
 
-	    if (Input.GetMouseButtonDown(1))
-	    {
-	        PlaceNextPlatform();
+	        //Throw player if user touch the screen.
+	        if (isJumpReady && Input.GetMouseButtonDown(0))
+	        {
+	            HideTrajectoryPoints();
+	            FirePlayer();
+	        }
+	        return;
 	    }
 
         //If Player reach the target create next platform.
 	    if (isJumpSucceed)
 	    {
-	        SetPlayerPosition();
-	        PlaceNextPlatform();
+	        StartCoroutine(SlidePlayerAndPlatform());
+	        isJumpSucceed = false;
 	    }
 	}
 
@@ -121,7 +132,7 @@ public class GameController : Singleton<GameController>
         var angle = Mathf.Rad2Deg * (Mathf.Atan2(pVelocity.y, pVelocity.x));
         float fTime = 0;
         fTime += 0.1f;
-        for (var i = 0; i < numOfTrajectoryPoints; i++)
+            for (var i = 0; i < numOfTrajectoryPoints; i++)
         {
             var dx = velocity * fTime * Mathf.Cos(angle * Mathf.Deg2Rad);
             var dy = velocity * fTime * Mathf.Sin(angle * Mathf.Deg2Rad) -
@@ -135,22 +146,69 @@ public class GameController : Singleton<GameController>
         }
     }
 
+    private void HideTrajectoryPoints()
+    {
+        foreach (var point in trajectoryPoints)
+        {
+            point.GetComponent<SpriteRenderer>().enabled = false;
+        }
+    }
+
     private void FirePlayer()
     {
         var dir = Quaternion.AngleAxis(Angle, Vector3.forward) * Vector3.right;
         playerRigidbody2D.AddForce(dir * Force);
+        isJumpReady = false;
     }
 
-    private void SetPlayerPosition()
+    private IEnumerator SlidePlayerAndPlatform()
     {
+        var timeToReachTarget = 1.0f;
+        var t = 0.0f;
+        t += Time.deltaTime / timeToReachTarget;
 
+        Player.GetComponent<Rigidbody2D>().isKinematic = true;
+
+        while (t < 1)
+        {
+            t += Time.deltaTime / timeToReachTarget;
+            Player.transform.position = Vector3.LerpUnclamped(Player.transform.position, playerInitialPosition, t);
+            var currentPlatformPos = PlayerController.Instance._currentPlatform.transform.position;
+            PlayerController.Instance._currentPlatform.transform.position = Vector3.LerpUnclamped(currentPlatformPos, platformInitialPosition, t);
+            yield return null;
+        }
+
+        Player.GetComponent<Rigidbody2D>().isKinematic = false;
+
+        PlaceNextPlatform();
+
+        nextJumpReady = true;
+        //HACK:refresh trajectory points
+        trajectoryPoints.Clear();
+        isJumpReady = true;
+        PlayerController.Instance.GetComponent<Rigidbody2D>().freezeRotation = false;
     }
 
     private void PlaceNextPlatform()
     {
+        Debug.Log("PlaceNextPlatform");
         var platform = Instantiate(platformPrefab);
         platform.GetComponent<PlatformController>().ResizeAccordingToScreenSize(Random.Range(-1.0f, 1.0f), true);
-        isJumpSucceed = false;
+        var platformWidth = platform.GetComponent<SpriteRenderer>().bounds.size.x;
+
+        var rightBottom = Camera.main.ViewportToWorldPoint(new Vector3(1, 0, 0));
+        var width = rightBottom.x * 2;
+
+        Debug.Log(platformInitialPosition.x + "  --  " + width);
+
+        var randomRatio = Random.Range(-0.1f, 0.1f);
+        var randomRatioDisplacement = width * randomRatio;
+        Debug.Log(randomRatioDisplacement + " = " + width + " * " + randomRatio);
+        platform.transform.position = new Vector3(platformInitialPosition.x + randomRatioDisplacement + platformWidth/2.0f +(width / 2.0f),
+            platformInitialPosition.y,
+            platformInitialPosition.z);
+
+        PlayerController.Instance.SetTargetPlatform(platform);
     }
 
     public void SetJumpFinalState(bool state)

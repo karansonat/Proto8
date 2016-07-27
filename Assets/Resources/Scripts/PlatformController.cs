@@ -3,7 +3,7 @@ using System.Collections;
 
 public class PlatformController : MonoBehaviour
 {
-    private float _ratio = 5.0f;
+    private float _ratio = 7.0f;
 
     void Awake()
     {
