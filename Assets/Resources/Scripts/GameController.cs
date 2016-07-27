@@ -1,17 +1,15 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using UnityEngine.UI;
-using ADInterstitialAd = UnityEngine.iOS.ADInterstitialAd;
 
 public class GameController : Singleton<GameController>
 {
-    public GameObject Player;
+
     public GameObject trajectoryPointPrefab;
     [Range(30, 60)] public int Angle = 50;
     [Range(300, 600)] public int Force = 300;
     [Range(5, 20)] public int numOfTrajectoryPoints = 20;
+
+    private GameObject Player;
     private bool isJumpSucceed = false;
     private Vector3 playerInitialPosition;
     private Rigidbody2D playerRigidbody2D;
@@ -21,15 +19,20 @@ public class GameController : Singleton<GameController>
     private int _lastTrajectoryAngle = 50;
     private int _lastForce = 50;
     private GameObject _trajectoryPointHolder;
+    private GameObject platformPrefab;
+    private GameObject playerPrefab;
 
     private void initEnvironment()
     {
-        var platformPrefab = Resources.Load("Prefabs/Platform") as GameObject;
+        var startPlatform = Instantiate(platformPrefab);
+        Player = Instantiate(playerPrefab);
+        Player.name = "Player";
+
         var playerWidth = Player.GetComponent<SpriteRenderer>().bounds.size.x;
         var playerHeight = Player.GetComponent<SpriteRenderer>().bounds.size.y;
-        var platformWidth = platformPrefab.GetComponent<SpriteRenderer>().bounds.size.x;
-        var platformHeight = platformPrefab.GetComponent<SpriteRenderer>().bounds.size.y;
-        var startPlatform = Instantiate(platformPrefab) as GameObject;
+        var platformWidth = startPlatform.GetComponent<SpriteRenderer>().bounds.size.x;
+        var platformHeight = startPlatform.GetComponent<SpriteRenderer>().bounds.size.y;
+
         var screenPosBottomLeft = new Vector3(0, 0, 10);
         var worldPosBottomLeft = Camera.main.ScreenToWorldPoint(screenPosBottomLeft);
 
@@ -47,6 +50,8 @@ public class GameController : Singleton<GameController>
     void Start ()
 	{
 	    Application.targetFrameRate = 60;
+	    platformPrefab = Resources.Load("Prefabs/Platform") as GameObject;
+	    playerPrefab = Resources.Load("Prefabs/Player") as GameObject;
 	    initEnvironment();
 	    playerInitialPosition = Player.transform.position;
 	    playerRigidbody2D = Player.GetComponent<Rigidbody2D>();
@@ -62,7 +67,7 @@ public class GameController : Singleton<GameController>
 
 	void Update () {
 
-	    //Draw trajectory each frame;
+	    //Draw trajectory on every change;
 	    DrawTrajectory();
 
         //Throw player if user touch the screen.
@@ -71,9 +76,15 @@ public class GameController : Singleton<GameController>
 	        FirePlayer();
 	    }
 
+	    if (Input.GetMouseButtonDown(1))
+	    {
+	        PlaceNextPlatform();
+	    }
+
         //If Player reach the target create next platform.
 	    if (isJumpSucceed)
 	    {
+	        SetPlayerPosition();
 	        PlaceNextPlatform();
 	    }
 	}
@@ -96,18 +107,12 @@ public class GameController : Singleton<GameController>
                 trajectoryPoints.Insert(i, point);
             }
         }
-
-        Debug.Log("DrawTrajectory::StartDrawing");
-        //FirePlayer();
         var dir = Quaternion.AngleAxis(Angle, Vector3.forward) * Vector3.right;
         var f = dir * Force;
         var velocity = (f / playerRigidbody2D.mass) * Time.fixedDeltaTime;
         setTrajectoryPoints(playerInitialPosition, velocity);
         _lastTrajectoryAngle = Angle;
         _lastForce = Force;
-        //playerRigidbody2D.velocity = Vector2.zero;
-        //Player.transform.position = playerInitialPosition;
-
     }
 
     void setTrajectoryPoints(Vector3 pStartPosition, Vector3 pVelocity)
@@ -136,9 +141,15 @@ public class GameController : Singleton<GameController>
         playerRigidbody2D.AddForce(dir * Force);
     }
 
-    private void PlaceNextPlatform()
+    private void SetPlayerPosition()
     {
 
+    }
+
+    private void PlaceNextPlatform()
+    {
+        var platform = Instantiate(platformPrefab);
+        platform.GetComponent<PlatformController>().ResizeAccordingToScreenSize(Random.Range(-1.0f, 1.0f), true);
         isJumpSucceed = false;
     }
 
