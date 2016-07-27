@@ -16,11 +16,12 @@ public class GameController : Singleton<GameController>
     private GameObject Player;
     private bool isJumpSucceed = false;
     private bool isJumpReady = true;
+    private bool isGameOver = false;
     private Vector3 playerInitialPosition;
     private Rigidbody2D playerRigidbody2D;
 
 
-    private List<GameObject> trajectoryPoints;
+    private List<GameObject> trajectoryPoints = new List<GameObject>();
     private int _lastTrajectoryAngle = 50;
     private int _lastForce = 50;
     private GameObject _trajectoryPointHolder;
@@ -76,8 +77,9 @@ public class GameController : Singleton<GameController>
 	    }
 	}
 
-	void Update () {
-
+	void Update ()
+	{
+	    if (isGameOver) return;
 	    if (nextJumpReady)
 	    {
             //Draw trajectory on every change;
@@ -181,12 +183,18 @@ public class GameController : Singleton<GameController>
         Player.GetComponent<Rigidbody2D>().isKinematic = false;
 
         PlaceNextPlatform();
+    }
 
+    private void SetNextSession()
+    {
         nextJumpReady = true;
         //HACK:refresh trajectory points
         trajectoryPoints.Clear();
         isJumpReady = true;
         PlayerController.Instance.GetComponent<Rigidbody2D>().freezeRotation = false;
+
+        Angle = Random.Range(45, 60);
+
     }
 
     private void PlaceNextPlatform()
@@ -209,6 +217,7 @@ public class GameController : Singleton<GameController>
             platformInitialPosition.z);
 
         PlayerController.Instance.SetTargetPlatform(platform);
+        SetNextSession();
     }
 
     public void SetJumpFinalState(bool state)
